@@ -46,7 +46,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "https://jobflow-backend-bhvw.onrender.com"
+      "apiBaseUrl": "https://jobflow-backend-bhvw.onrender.com",
+      "router": {},
+      "eas": {
+        "projectId": "c196c6d2-a9fc-4284-b533-6972e08c77d5"
+      }
     }
   }
 }
