@@ -1,17 +1,85 @@
-import React, { useMemo } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import Screen from "../../components/Screen";
-import { COLORS, SHADOW } from "../../lib/ui";
-import { clearAuth, deleteAccount } from "../../lib/auth";
+// mobile/app/(tabs)/settings.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 
-export default function SettingsTab() {
-  const rows = useMemo(
+import Screen, { COLORS, RADIUS, SHADOW, SPACING } from "../../components/Screen";
+import { clearAuth, getToken } from "../../lib/auth";
+
+type Row = { title: string; route?: string; value?: string };
+
+function RowItem({ title, value, onPress }: { title: string; value?: string; onPress?: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        styles.row,
+        pressed && onPress ? styles.rowPressed : null,
+        !onPress ? styles.rowDisabled : null,
+      ]}
+      hitSlop={10}
+    >
+      <Text style={styles.rowText}>{title}</Text>
+      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+    </Pressable>
+  );
+}
+
+export default function SettingsScreen() {
+  const [signedIn, setSignedIn] = useState<boolean>(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const token = await getToken();
+        if (mounted) setSignedIn(!!token);
+      } catch {
+        if (mounted) setSignedIn(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const logout = async () => {
+    try {
+      await clearAuth();
+      Alert.alert("Logged out", "You will need to log in again to access your data.");
+      router.replace("/(auth)/login");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "Failed to log out.");
+    }
+  };
+
+  const deleteAccount = async () => {
+    Alert.alert(
+      "Delete account",
+      "This will remove your account and all data. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            // NOTE: If you later add a backend endpoint to delete the user,
+            // call it here, THEN clearAuth() and route to login.
+            await clearAuth();
+            router.replace("/(auth)/login");
+          },
+        },
+      ]
+    );
+  };
+
+  const appRows: Row[] = useMemo(
     () => [
-      { title: "My Profile", onPress: () => router.push("/profile") },
-      { title: "Business Profile", onPress: () => router.push("/business") },
-      { title: "Clients", onPress: () => router.push("/clients") },
-      { title: "Vendors", onPress: () => router.push("/vendors") },
+      { title: "My Profile", route: "/profile" },
+      { title: "Business Profile", route: "/business" },
+      { title: "Clients", route: "/clients" },
+      { title: "Vendors", route: "/vendors" },
       { title: "App", value: "JobFlow" },
       { title: "Theme", value: "Dark" },
       { title: "Version", value: "1.0.0" },
@@ -19,69 +87,48 @@ export default function SettingsTab() {
     []
   );
 
-  const logout = () => {
-    Alert.alert("Log out?", "You’ll need to log in again to access your data.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log out",
-        style: "destructive",
-        onPress: async () => {
-          await clearAuth();
-          router.replace("/login");
-        },
-      },
-    ]);
-  };
-
-  const confirmDelete = () => {
-    Alert.alert(
-      "Delete account?",
-      "This permanently deletes your account and all jobs, invoices, expenses and mileage. This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await deleteAccount();
-            } finally {
-              await clearAuth();
-              router.replace("/login");
-            }
-          },
-        },
-      ]
-    );
-  };
-
   return (
-    <Screen>
+    <Screen title="Settings" subtitle="Account & app preferences">
+      {/* Account Card */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Account</Text>
 
-        <View style={styles.pill}>
-          <Text style={styles.pillTitle}>Signed in</Text>
-          <Text style={styles.pillSub}>Your session token is stored securely</Text>
+        <View style={styles.subCard}>
+          <Text style={styles.subTitle}>{signedIn ? "Signed in" : "Signed out"}</Text>
+          <Text style={styles.subText}>
+            {signedIn ? "Your session token is stored securely" : "Please log in to access your data"}
+          </Text>
         </View>
 
-        <TouchableOpacity style={styles.dangerBtn} onPress={logout}>
-          <Text style={styles.dangerText}>Log out</Text>
-        </TouchableOpacity>
+        <Pressable onPress={logout} style={({ pressed }) => [styles.btn, pressed && styles.btnPressed]}>
+          <Text style={styles.btnText}>Log out</Text>
+        </Pressable>
 
-        <TouchableOpacity style={[styles.dangerBtn, styles.deleteBtn]} onPress={confirmDelete}>
-          <Text style={styles.dangerText}>Delete account</Text>
-        </TouchableOpacity>
+        <Pressable
+          onPress={deleteAccount}
+          style={({ pressed }) => [styles.btn, styles.btnDanger, pressed && styles.btnPressed]}
+        >
+          <Text style={styles.btnText}>Delete account</Text>
+        </Pressable>
       </View>
 
+      {/* App Card */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>App</Text>
 
-        {rows.map((r) => (
-          <View key={r.title} style={styles.row}>
-            <Text style={styles.rowTitle}>{r.title}</Text>
-            <Text style={styles.rowValue}>{r.value}</Text>
-          </View>
+        {appRows.map((r) => (
+          <RowItem
+            key={r.title}
+            title={r.title}
+            value={r.value}
+            onPress={
+              r.route
+                ? () => {
+                    router.push(r.route as any);
+                  }
+                : undefined
+            }
+          />
         ))}
       </View>
     </Screen>
@@ -91,49 +138,81 @@ export default function SettingsTab() {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 18,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 16,
-    marginBottom: 12,
-    ...(SHADOW as any).md,
+    marginBottom: SPACING.lg,
+    ...SHADOW.card,
   },
   cardTitle: {
     color: COLORS.text,
     fontWeight: "900",
-    fontSize: 16,
-    marginBottom: 10,
+    fontSize: 18,
+    marginBottom: SPACING.md,
   },
-  pill: {
-    backgroundColor: COLORS.bg,
+
+  subCard: {
+    backgroundColor: "rgba(255,255,255,0.03)",
+    borderRadius: RADIUS.lg,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 16,
-    padding: 14,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
   },
-  pillTitle: { color: COLORS.text, fontWeight: "900", fontSize: 14 },
-  pillSub: { color: COLORS.muted, fontWeight: "700", marginTop: 6 },
+  subTitle: {
+    color: COLORS.text,
+    fontWeight: "900",
+    fontSize: 16,
+  },
+  subText: {
+    marginTop: 6,
+    color: COLORS.muted,
+    fontWeight: "700",
+    fontSize: 13,
+  },
 
-  dangerBtn: {
+  btn: {
     backgroundColor: COLORS.danger,
-    borderRadius: 14,
+    borderRadius: RADIUS.lg,
     paddingVertical: 14,
     alignItems: "center",
-    marginTop: 12,
+    marginBottom: SPACING.md,
   },
-  deleteBtn: {
-    opacity: 0.9,
+  btnDanger: {
+    opacity: 0.95,
   },
-  dangerText: { color: "white", fontWeight: "900", fontSize: 15 },
+  btnPressed: {
+    opacity: 0.85,
+  },
+  btnText: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 16,
+  },
 
   row: {
+    paddingVertical: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
-  rowTitle: { color: COLORS.text, fontWeight: "800" },
-  rowValue: { color: COLORS.muted, fontWeight: "700" },
+  rowPressed: {
+    opacity: 0.85,
+  },
+  rowDisabled: {
+    opacity: 0.6,
+  },
+  rowText: {
+    color: COLORS.text,
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  rowValue: {
+    color: COLORS.muted,
+    fontWeight: "800",
+    fontSize: 15,
+  },
 });
